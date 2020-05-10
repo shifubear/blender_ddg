@@ -1,22 +1,20 @@
 import bpy
 import bmesh 
+import mathutils
 
 import numpy as np
 from scipy.sparse import coo_matrix
 
 class Geometry:
     """
-    
-    Works on a manifold triangle mesh. 
-    bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
-
+    Load the currently selected object as a geometric object. 
     """
     
     def __init__(self):
         """
         
         """
-        
+
         self.me = bpy.context.object.data
         self.bm = bmesh.new()
         self.bm.from_mesh(self.me)
@@ -42,6 +40,14 @@ class Geometry:
         """
         self.bm.to_mesh(self.me)
         
+    def triangulate(self):
+        """
+        Apply the triangulate modifier. It'll often be important to call this before running the geometric algorithms, 
+        since they are not robust enough to handle non-triangulated meshes. 
+        """
+        bpy.ops.object.modifier_add(type='TRIANGULATE')
+        bpy.ops.object.modifier_apply(apply_as='DATA', modifier="Triangulate")
+
         
     def barycentric_dual_area(self, v):
         """
@@ -169,32 +175,27 @@ class Geometry:
             data.append(self.barycentric_dual_area(self.bm.verts[i]))
             
         return coo_matrix((np.array(data), (np.array(row), np.array(col))), shape=(n, n))
-    
 
+    
+    def normalize(self, rescale = True):
+        # Compute the center of mass
+        n = len(self.bm.verts)
+        com = mathutils.Vector()
+        for v in self.bm.verts:
+            com += v.co
 
-class TestPanel(bpy.types.Panel):
-    bl_label = "Test Panel"
-    bl_idname = "TestPanel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "NewTab"
-    
-    def draw(self, context):
-        layout = self.layout
-        
-        row = layout.row()
-        row.label(text = "Sample Text", icon="CUBE")
-        
-        
-def register():
-    bpy.utils.register_class(TestPanel)
-    
-    
-def unregister():
-    bpy.utils.unregister_class(TestPanel)
-    
+        com /= n
 
+        # Move object to origin and determine radius 
+        radius = -1
+        for v in self.bm.verts:
+            v.co -= com
+            radius = max(radius, v.co.length)
 
+        if rescale:
+            for v in self.bm.verts:
+                v.co /= radius
+            
     
 if __name__=="__main__":
 #    register()
